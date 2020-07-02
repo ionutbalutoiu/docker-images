@@ -1,0 +1,38 @@
+FROM ubuntu:bionic
+
+LABEL maintainer="ibalutoiu@cloudbasesolutions.com"
+
+# Install system packages
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        software-properties-common gnupg-agent apt-transport-https \
+        ca-certificates curl kmod procps
+
+# Install Docker
+RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add - && \
+    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" && \
+    apt-get install -y --no-install-recommends docker-ce
+
+# APT cleanup
+RUN apt-get autoclean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install tini
+ADD https://github.com/krallin/tini/releases/download/v0.19.0/tini /usr/local/bin/tini
+RUN chmod +x /usr/local/bin/tini
+
+# Set up subuid/subgid so that "--userns-remap=default" works out-of-the-box
+RUN set -x && \
+    addgroup --system dockremap && \
+    adduser --system --ingroup dockremap dockremap && \
+    echo 'dockremap:165536:65536' >> /etc/subuid && \
+    echo 'dockremap:165536:65536' >> /etc/subgid
+
+RUN mkdir -p /var/log/docker
+
+VOLUME /var/lib/docker
+EXPOSE 2375 2376
+ENV container docker
+
+COPY entrypoint.sh /entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/tini", "--", "/entrypoint.sh"]
